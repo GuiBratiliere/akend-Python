@@ -86,54 +86,60 @@ hoteis = [
 
 class Hoteis(Resource):
     def get(self):
-        return {'Hoteis': hoteis}
+        return {'Hoteis': [hotel.json() for hotel in HotelModel.query.all()]}
     
 class Hotel(Resource):
 
     #define o contrutor só é chamado quando solicitado no parse_args
     argumentos = reqparse.RequestParser()
-    argumentos.add_argument('nome')
-    argumentos.add_argument('cidade')
-    argumentos.add_argument('preco')
-    argumentos.add_argument('estrelas')
-    argumentos.add_argument('disponivel')
-
-    def verifica_hotel(hotel_id):
-        for hotel in hoteis:
-            if hotel['id'] == hotel_id:
-                return hotel
-        return None 
+    argumentos.add_argument('nome', type=str, required=True, help="O campo 'nome' não pode ficar em branco")
+    argumentos.add_argument('cidade', type=str)
+    argumentos.add_argument('preco', type=float, required=True)
+    argumentos.add_argument('estrelas', type=float)
+    argumentos.add_argument('disponivel', type=str)
     
     def get(self, hotel_id):
-        hotel = Hotel.verifica_hotel(hotel_id)
+        hotel = HotelModel.verifica_hotel(hotel_id)
         if hotel:
-            return hotel
+            return hotel.json()
         return { 'message': 'Hotel not found!' }, 404
 
 
     def post(self, hotel_id):
+        if HotelModel.verifica_hotel(hotel_id):
+            return {'message': 'Hotel já existe!'}, 400
+        
         
         dados = Hotel.argumentos.parse_args()
-        hotel_objeto = HotelModel(hotel_id, **dados)
-        novo_hotel = hotel_objeto.jason()
-
-        hoteis.append(novo_hotel)
-        return novo_hotel, 200
+        hotel = HotelModel(hotel_id, **dados)
+        try:
+            hotel.save_hotel()
+        except:
+            return {'message': 'Houve um erro interno ao salvar'}, 500
+        return hotel.json()
 
     def put(self, hotel_id):
 
         dados = Hotel.argumentos.parse_args()
-        hotel_objeto = HotelModel(hotel_id, **dados)
-        novo_hotel = hotel_objeto.jason()
-
-        hotel = Hotel.verifica_hotel(hotel_id)
-        if hotel:
-            hotel.update(novo_hotel)
-            return novo_hotel, 200
-        hoteis.append(novo_hotel)
-        return novo_hotel, 201
+        
+        hotel_encontrado = HotelModel.verifica_hotel(hotel_id)
+        if hotel_encontrado:
+            hotel_encontrado.update_hotel(**dados)
+            hotel_encontrado.save_hotel()
+            return hotel_encontrado.json(), 200
+        hotel = HotelModel(hotel_id, **dados)
+        try:
+            hotel.save_hotel()
+        except:
+            return {'message': 'Houve um erro interno ao salvar'}, 500
+        return hotel.json(), 201
 
     def delete(self, hotel_id):
-        global hoteis
-        hoteis = [ hotel for hotel in hoteis if hotel['id'] != hotel_id]
-        return {'message':'hotel deletado'}
+        hotel = HotelModel.verifica_hotel(hotel_id)
+        if hotel:
+            try:
+                hotel.delete_hotel()
+            except:
+                return {'message': 'Houve um erro interno ao salvar'}, 500
+            return {'message':'hotel deletado'}
+        return {'message': 'Hotel não existe!'}, 404
